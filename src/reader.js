@@ -76,10 +76,6 @@ var cardSerialReady = translationReady.then(function(translation) {
             console.log('Cannot translate card name:\n', cannotTranslate);
 
             resolve(serial);
-
-            fs.writeFile('./out/CARD_Name_Zh.bin.txt', newLines.join('\r\n'), {encoding: 'UTF8'}, function(err) {
-                if(err) return console.log(err);
-            });
         });
     });
 });
@@ -97,21 +93,22 @@ Q.all([translationReady, cardSerialReady]).then(function(datas) {
         var cannotTranslate = [];
 
         _.each(lines, function(line) {
-            var m = line.trim().match(/^(\d+)＾.+$/);
+            var m = line.trim().match(/^(\d+)＾(.+)$/);
             if(m) {
                 var cardNo = parseInt(m[1]);
+                var cardDesc = m[2].replace(/\$R(.+?)\(.+?\)/g, function(all, $1) { return $1; });
                 var cardJpName = serials[cardNo];
                 var cardTranslation = translation[cardJpName];
                 if(cardTranslation) {
                     var translatedName = cardTranslation.zh;
                     var translatedDesc = cardTranslation.desc;
-                    var newLine = cardNo + '＾' + translatedDesc;
+                    var newLine = cardNo + '＾' + translatedName + '＾' + translatedDesc;
                     if(newLine.length > line.length) {
                         console.log('Warning:', cardNo, translatedName, 'desc is too long to translate', cardJpName);
                     }
                     newLines.push(newLine);
                 } else {
-                    var newLine = line.replace(/\$R(.+?)\(.+?\)/g, function(all, $1) { return $1; });
+                    var newLine = cardNo + '＾' + cardJpName + '＾' + cardDesc;
                     cannotTranslate.push(cardNo);
                     newLines.push(newLine);
                 }
@@ -122,7 +119,7 @@ Q.all([translationReady, cardSerialReady]).then(function(datas) {
 
         console.log('Cannot translate card desc:\n', cannotTranslate);
 
-        fs.writeFile('./out/CARD_Desc_Zh.txt', newLines.join('\r\n'), {encoding: 'UTF16LE'}, function(err) {
+        fs.writeFile('./out/CARD_Name_Desc_Zh.txt', newLines.join('\r\n'), {encoding: 'UTF16LE'}, function(err) {
             if(err) return console.log(err);
             console.log('done');
         });
