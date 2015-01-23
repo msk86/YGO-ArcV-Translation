@@ -24,7 +24,7 @@ jpReady = Q.promise(function(resolve, reject) {
     dbJp.serialize(function() {
         var jp = {};
         dbJp.each("SELECT t.id, t.name FROM texts t", function(err, row) {
-            jp["" + row.id] = {jp: row.name};
+            jp["" + row.id] = {jp: row.name.replace(/ /g, '　').replace(/\./g, '．')};
         }, function() {
             resolve(jp);
         });
