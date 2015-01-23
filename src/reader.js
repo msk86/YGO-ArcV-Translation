@@ -48,33 +48,83 @@ var cardSerialReady = translationReady.then(function(translation) {
 
             var lines = txt.split('\r\n');
             var newLines = [];
-
+            var cannotTranslate = [];
+            var serial = [''];
             _.each(lines, function(line) {
-                var m = line.trim().match(/^([0-9A-Z,]+)(.*)$/);
+                var m = line.trim().match(/^([0-9A-Z,]+),(.*?)$/);
                 if(m) {
                     var code = m[1];
                     var cardName = m[2].replace(/\$R(.+?)\(.+?\)/g, function(all, $1) { return $1; });
+                    serial.push(cardName);
                     var cardTranslation = translation[cardName];
                     if(cardTranslation) {
                         var translatedName = cardTranslation.zh;
-                        var newLine = code + translatedName;
+                        var newLine = code + ',' + translatedName;
                         if(newLine.length > line.length) {
                             console.log('Warning:', translatedName, 'name is too long to translate', m[2]);
                         }
                         newLines.push(newLine);
                     } else {
-                        newLines.push(code + cardName);
+                        cannotTranslate.push(code);
+                        newLines.push(code + ',' + cardName);
                     }
                 } else {
                     newLines.push('');
                 }
             });
 
-            resolve(_.filter(newLines, function(newLine) {return newLine.length > 0;}));
+            console.log('Cannot translate card name:\n', cannotTranslate);
 
-            fs.writeFile('./out/CARD_Name_Zh.bin.txt', newLines.join('\r\n'), {encoding: 'utf8'}, function(err) {
+            resolve(serial);
+
+            fs.writeFile('./out/CARD_Name_Zh.bin.txt', newLines.join('\r\n'), {encoding: 'UTF8'}, function(err) {
                 if(err) return console.log(err);
             });
+        });
+    });
+});
+
+Q.all([translationReady, cardSerialReady]).then(function(datas) {
+    var translation = datas[0];
+    var serials = datas[1];
+
+    fs.readFile('./resources/CARD_Desc_J.txt', {encoding: 'UTF16LE'}, function(err, txt) {
+        if(err) return console.log(err);
+        txt = txt.replace(/\r\n/g, '').replace(/(\d+?＾)/g, '\r\n$1');
+        var lines = txt.split('\r\n');
+
+        var newLines = [];
+        var cannotTranslate = [];
+
+        _.each(lines, function(line) {
+            var m = line.trim().match(/^(\d+)＾.+$/);
+            if(m) {
+                var cardNo = parseInt(m[1]);
+                var cardJpName = serials[cardNo];
+                var cardTranslation = translation[cardJpName];
+                if(cardTranslation) {
+                    var translatedName = cardTranslation.zh;
+                    var translatedDesc = cardTranslation.desc;
+                    var newLine = cardNo + '＾' + translatedDesc;
+                    if(newLine.length > line.length) {
+                        console.log('Warning:', cardNo, translatedName, 'desc is too long to translate', cardJpName);
+                    }
+                    newLines.push(newLine);
+                } else {
+                    var newLine = line.replace(/\$R(.+?)\(.+?\)/g, function(all, $1) { return $1; });
+                    cannotTranslate.push(cardNo);
+                    newLines.push(newLine);
+                }
+            } else {
+                newLines.push(line);
+            }
+        });
+
+        console.log('Cannot translate card desc:\n', cannotTranslate);
+
+        fs.writeFile('./out/CARD_Desc_Zh.txt', newLines.join('\r\n'), {encoding: 'UTF16LE'}, function(err) {
+            if(err) return console.log(err);
+            console.log('done');
         });
     });
 });
