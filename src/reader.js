@@ -9,8 +9,8 @@ zhReady = Q.promise(function(resolve, reject) {
     dbZh.serialize(function() {
 
         var zh = {};
-        dbZh.each("SELECT t.id, t.name FROM texts t where id =32864", function(err, row) {
-            zh[""+ row.id] = {zh: row.name};
+        dbZh.each("SELECT t.id, t.name, t.desc FROM texts t", function(err, row) {
+            zh[""+ row.id] = {zh: row.name, desc: row.desc};
         }, function() {
             resolve(zh);
         });
@@ -23,7 +23,7 @@ jpReady = Q.promise(function(resolve, reject) {
 
     dbJp.serialize(function() {
         var jp = {};
-        dbJp.each("SELECT t.id, t.name FROM texts t where id =32864", function(err, row) {
+        dbJp.each("SELECT t.id, t.name FROM texts t", function(err, row) {
             jp["" + row.id] = {jp: row.name};
         }, function() {
             resolve(jp);
@@ -32,27 +32,49 @@ jpReady = Q.promise(function(resolve, reject) {
     dbJp.close();
 });
 
-zhReady.then(function(data) {
-    console.log(data);
-});
-
-jpReady.then(function(data) {
-    console.log(data);
-});
-
 translationReady = Q.all([zhReady, jpReady]).then(function(datas) {
     var translation = {};
     var zh = datas[0], jp = datas[1];
     _.each(zh, function(v, k) {
-        if(jp[k]) { translation[k] = _.extend({}, v, jp[k]); }
+        if(jp[k]) { translation[jp[k].jp] = _.extend({}, v); }
     });
     return translation;
 });
 
-fs.readFile('./resources/CARD_Name_R.bin.txt', {encoding: 'utf8'}, function(err, txt) {
-    if(err) return console.log(err);
+var cardSerialReady = translationReady.then(function(translation) {
+    return Q.promise(function(resolve) {
+        fs.readFile('./resources/CARD_Name_R.bin.txt', {encoding: 'utf8'}, function(err, txt) {
+            if(err) return console.log(err);
 
-    console.log(txt.substr(0, 200));
+            var lines = txt.split('\r\n');
+            var newLines = [];
 
+            _.each(lines, function(line) {
+                var m = line.trim().match(/^([0-9A-Z,]+)(.*)$/);
+                if(m) {
+                    var code = m[1];
+                    var cardName = m[2].replace(/\$R(.+?)\(.+?\)/g, function(all, $1) { return $1; });
+                    var cardTranslation = translation[cardName];
+                    if(cardTranslation) {
+                        var translatedName = cardTranslation.zh;
+                        var newLine = code + translatedName;
+                        if(newLine.length > line.length) {
+                            console.log('Warning:', translatedName, 'name is too long to translate', m[2]);
+                        }
+                        newLines.push(newLine);
+                    } else {
+                        newLines.push(code + cardName);
+                    }
+                } else {
+                    newLines.push('');
+                }
+            });
 
+            resolve(_.filter(newLines, function(newLine) {return newLine.length > 0;}));
+
+            fs.writeFile('./out/CARD_Name_Zh.bin.txt', newLines.join('\r\n'), {encoding: 'utf8'}, function(err) {
+                if(err) return console.log(err);
+            });
+        });
+    });
 });
